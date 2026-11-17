@@ -8,6 +8,7 @@ import {
   fetchTeacherList, 
   fetchSubjectList, 
   fetchSectionList,
+  fetchActiveSchoolYear,
   getSessionUser
 } from '@/app/lib/data';
 import styles from '@/app/ui/kteacher/dashboard.module.css';
@@ -196,10 +197,42 @@ const KeyTeacherDashboardContent = () => {
       if (validRows.length === 0) {
         alert("No valid rows found to import.");
       } else {
+        // Imported students only show up in lists once they have an enrollment,
+        // so resolve the active school year and each section's grade level first
+        let enrollmentRows = [];
+        if (importType !== 'classes') {
+          const activeSy = await fetchActiveSchoolYear();
+          if (!activeSy) throw new Error("No active school year is set in System Configuration.");
+
+          const sectionIds = [...new Set(validRows.map(r => r.sectionid))];
+          const { data: sectionData, error: sectionError } = await supabase
+            .from('sections')
+            .select('sectionid, gradelevel')
+            .in('sectionid', sectionIds);
+          if (sectionError) throw sectionError;
+
+          const gradeBySection = Object.fromEntries(sectionData.map(s => [s.sectionid, s.gradelevel]));
+          const unknownIds = sectionIds.filter(id => !(id in gradeBySection));
+          if (unknownIds.length > 0) throw new Error(`Unknown section_id: ${unknownIds.join(', ')}`);
+
+          enrollmentRows = validRows.map(r => ({
+            lrn: r.lrn,
+            sectionid: r.sectionid,
+            sy_id: activeSy.sy_id,
+            gradelevel: gradeBySection[r.sectionid],
+            status: 'Enrolled'
+          }));
+        }
+
         const targetTable = importType === 'classes' ? 'classes' : 'students';
         const { error: insertError } = await supabase.from(targetTable).insert(validRows);
-        
+
         if (insertError) throw insertError;
+
+        if (enrollmentRows.length > 0) {
+          const { error: enrollError } = await supabase.from('enrollments').insert(enrollmentRows);
+          if (enrollError) throw enrollError;
+        }
         alert(`✅ Successfully imported ${validRows.length} ${importType}!`);
       }
 

@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
 import { cookies } from 'next/headers';
 import { supabase } from "./utils";
+import { normalizeRole } from "./roles";
 
 export const login = async (prevState, formData) => {
     const { username, password } = Object.fromEntries(formData);
@@ -264,6 +265,7 @@ export async function fetchStudentFullProfile(lrn) {
         lastname,
         firstname,
         middleinitial,
+        sex,
         birthday,
         address,
         enrollments (
@@ -360,7 +362,17 @@ export const fetchSectionDetails = async (sectionId) => {
   }
 };
 
-export const fetchReportData = async (sy_id, quarterNum) => {
+export const fetchReportData = async (yearrange, quarterNum) => {
+  const { data: schoolYear, error: syError } = await supabase
+    .from('schoolyears')
+    .select('sy_id')
+    .eq('yearrange', yearrange)
+    .maybeSingle();
+
+  if (syError) throw syError;
+  if (!schoolYear) return [];
+  const sy_id = schoolYear.sy_id;
+
   const { data, error } = await supabase
     .from('enrollments')
     .select(`
@@ -470,7 +482,7 @@ export const registerUser = async (prevState, formData) => {
   try {
     // 1. Security check: Only an active registrar can do this
     const sessionUser = await getSessionUser();
-    if (!sessionUser || sessionUser.role !== 'registrar') {
+    if (!sessionUser || normalizeRole(sessionUser.role) !== 'registrar') {
       return { error: "Unauthorized: Only registrars can create accounts." };
     }
 
@@ -488,7 +500,7 @@ export const registerUser = async (prevState, formData) => {
     const hashedPassword = await bcrypt.hash(password, salt);
 
     // 4. Insert into the 'users' table
-    const { error } = await supabase
+    const { data: newUser, error } = await supabase
       .from('users')
       .insert([{
         username: email, // Assuming email is the username for login
@@ -498,9 +510,29 @@ export const registerUser = async (prevState, formData) => {
         last_name: lastName,
         phone: phone,
         email: email
-      }]);
+      }])
+      .select('id')
+      .single();
 
     if (error) throw error;
+
+    // 5. Teachers also need a 'teachers' row; teacher pages look it up by email
+    if (normalizeRole(role) !== 'registrar') {
+      const { error: teacherError } = await supabase
+        .from('teachers')
+        .upsert([{
+          firstname: firstName,
+          lastname: lastName,
+          email: email,
+          phone: phone
+        }], { onConflict: 'email', ignoreDuplicates: true });
+
+      if (teacherError) {
+        // Don't leave a login without its teacher record
+        await supabase.from('users').delete().eq('id', newUser.id);
+        throw teacherError;
+      }
+    }
 
     // Success! 
     // We don't use redirect() inside a try/catch block usually, 
@@ -621,7 +653,7 @@ export const saveGradesToDb = async (students) => {
         writtenwork: parseFloat(s.writtenwork) || 0,
         performancetask: parseFloat(s.performancetask) || 0,
         finalgrade: parseFloat(s.finalgrade) || 0,
-        remarks: s.remarks || "PENDING",
+        remarks: (s.remarks || "PENDING").toUpperCase(),
       };
 
       if (typeof s.gradeid === 'number') {
@@ -975,7 +1007,7 @@ export const fetchGradeSummary = async () => {
       }
       acc[className].total += curr.finalgrade || 0;
       acc[className].count += 1;
-      if (curr.remarks === 'Passed') acc[className].passing += 1;
+      if (curr.remarks?.toUpperCase() === 'PASSED') acc[className].passing += 1;
       return acc;
     }, {});
 
@@ -1083,6 +1115,24 @@ export const fetchSystemConfig = async () => {
 
   if (error) {
     console.error("Error fetching config:", error);
+    return null;
+  }
+  return data;
+};
+
+// The school year set as active in system_config, e.g. { sy_id: 1, yearrange: '2025-26' }
+export const fetchActiveSchoolYear = async () => {
+  const config = await fetchSystemConfig();
+  if (!config?.active_sy) return null;
+
+  const { data, error } = await supabase
+    .from('schoolyears')
+    .select('sy_id, yearrange')
+    .eq('yearrange', config.active_sy)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Error fetching active school year:", error);
     return null;
   }
   return data;

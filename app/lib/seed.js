@@ -18,7 +18,7 @@ export const seedUser = async () => {
     const { error } = await supabase
       .from('users')
       .insert([
-        { username: 'admin', password: hashedPassword, role: 'Registrar' }
+        { username: 'admin', password: hashedPassword, role: 'registrar' }
       ]);
 
     if (error) throw error;

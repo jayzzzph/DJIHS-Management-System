@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { FaUser, FaLock } from "react-icons/fa";
 import styles from "@/app/ui/login/login.module.css"
 import { login } from "@/app/lib/data";
+import { getRoleHome } from "@/app/lib/roles";
 
 const Login = () => {
   // state will hold { success, role, error } from our server action
@@ -14,17 +15,7 @@ const Login = () => {
   useEffect(() => {
     // If login is successful, redirect based on the role returned from the DB
     if (state?.success) {
-      if (state.role === 'registrar') {
-        router.push("/dashboard");
-      } else if (state.role === 'subject teacher') {
-        router.push("/dashboard/teacher");
-      } else if (state.role === 'key teacher') {
-        router.push("/dashboard/kteacher")
-      }
-      else {
-        // Fallback for any other roles
-        router.push("/dashboard");
-      }
+      router.push(getRoleHome(state.role));
     }
   }, [state, router]);
 

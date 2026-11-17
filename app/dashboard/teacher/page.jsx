@@ -49,7 +49,14 @@ function TeacherDashboardContent() {
                     .single();
 
                 if (config) {
-                    const currentQ = "q2"; 
+                    // Current quarter = first quarter whose deadline hasn't passed yet
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const currentQNum = [1, 2, 3, 4].find(q => {
+                        const deadline = config[`q${q}_deadline`];
+                        return deadline && new Date(deadline) >= today;
+                    }) || 4;
+                    const currentQ = `q${currentQNum}`;
                     const deadlineKey = `${currentQ}_deadline`;
                     const deadlineValue = config[deadlineKey];
 

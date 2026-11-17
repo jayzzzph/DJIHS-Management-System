@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSessionUser } from "@/app/lib/data";
+import { getRoleHome, normalizeRole } from "@/app/lib/roles";
 
 export default function RoleGuard({ children, allowedRole }) {
   const [authorized, setAuthorized] = useState(false);
@@ -19,10 +20,9 @@ export default function RoleGuard({ children, allowedRole }) {
       }
 
       // 2. Check if role matches (case-insensitive)
-      if (user.role?.toLowerCase() !== allowedRole.toLowerCase()) {
+      if (normalizeRole(user.role) !== normalizeRole(allowedRole)) {
         // Send them to their actual assigned dashboard
-        const safePath = user.role.toLowerCase().replace(" ", "");
-        router.replace(`/dashboard/${safePath}`);
+        router.replace(getRoleHome(user.role));
         return;
       }
 

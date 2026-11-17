@@ -6,6 +6,7 @@ import { TbReportAnalytics } from "react-icons/tb";
 import { MdDashboard, MdOutlineSubject, MdLogout, } from "react-icons/md";
 import MenuLink from './menuLink/menuLink';
 import { getSessionUser, logout } from '@/app/lib/data'; // Import your session helper
+import { normalizeRole } from '@/app/lib/roles';
 
 const menuItems = [
   {
@@ -128,7 +129,7 @@ const menuItems = [
 
 const Sidebar = async () => {
   const user = await getSessionUser();
-  const userRole = user?.role || "subject teacher";
+  const userRole = normalizeRole(user?.role) || "subject teacher";
 
   return (
     <div className={styles.container}>

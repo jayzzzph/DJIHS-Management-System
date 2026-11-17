@@ -63,7 +63,7 @@ const StudentProfileContent = ({ params }) => {
     subjectsMap[sCode].total += val;
     subjectsMap[sCode].count += 1;
     
-    if (g.remarks === 'Failed') subjectsMap[sCode].remarks = 'Failed';
+    if (g.remarks?.toUpperCase() === 'FAILED') subjectsMap[sCode].remarks = 'Failed';
   });
 
   const processedGrades = Object.values(subjectsMap);

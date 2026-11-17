@@ -17,7 +17,7 @@ import { Bar, Scatter } from 'react-chartjs-2';
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import styles from '@/app/ui/dashboard/classreports/classreports.module.css';
-import { fetchReportData } from '@/app/lib/data';
+import { fetchReportData, fetchActiveSchoolYear, fetchFilterOptions } from '@/app/lib/data';
 import RoleGuard  from '@/app/components/ProtectedRoutes';
 
 ChartJS.register(
@@ -32,10 +32,23 @@ const ClassReportsContent = () => {
   const gradeDistRef = useRef(null);
   const attendanceRef = useRef(null);
 
+  const [schoolYears, setSchoolYears] = useState([]);
   const [filters, setFilters] = useState({
-    schoolYear: '2025-26',
+    schoolYear: '',
     quarter: '1st Quarter'
   });
+
+  // Default the filter to the active school year from system_config
+  useEffect(() => {
+    const loadSchoolYears = async () => {
+      const [activeSy, options] = await Promise.all([fetchActiveSchoolYear(), fetchFilterOptions()]);
+      setSchoolYears(options.schoolYears);
+      const defaultSy = activeSy?.yearrange || options.schoolYears[0]?.yearrange || '';
+      if (defaultSy) setFilters(prev => ({ ...prev, schoolYear: defaultSy }));
+      else setLoading(false);
+    };
+    loadSchoolYears();
+  }, []);
 
   const getQuarterInt = (qString) => {
     const map = { "1st Quarter": 1, "2nd Quarter": 2, "3rd Quarter": 3, "4th Quarter": 4 };
@@ -43,11 +56,11 @@ const ClassReportsContent = () => {
   };
 
   const loadData = useCallback(async () => {
+    if (!filters.schoolYear) return;
     setLoading(true);
     try {
-      const sy_id = filters.schoolYear === '2025-26' ? 1 : 2; 
       const quarterNum = getQuarterInt(filters.quarter);
-      const data = await fetchReportData(sy_id, quarterNum);
+      const data = await fetchReportData(filters.schoolYear, quarterNum);
       setReportData(data);
     } catch (error) {
       console.error("Failed to load report:", error);
@@ -226,8 +239,9 @@ const ClassReportsContent = () => {
           <div className={styles.filterGroup}>
             <label>School Year</label>
             <select name="schoolYear" className={styles.filterSelect} value={filters.schoolYear} onChange={handleFilterChange}>
-              <option value="2025-26">2025-26</option>
-              <option value="2024-25">2024-25</option>
+              {schoolYears.map(sy => (
+                <option key={sy.yearrange} value={sy.yearrange}>{sy.yearrange}</option>
+              ))}
             </select>
           </div>
           <div className={styles.filterGroup}>
